@@ -1,0 +1,48 @@
+/* Responsive and accessibility styling for nb-search cloud console */
+
+html, body, #root {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+@media (max-width: 992px) {
+  .ant-layout-sider {
+    display: none !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .ant-layout-header {
+    padding: 0 12px !important;
+  }
+
+  .hide-on-mobile {
+    display: none !important;
+  }
+
+  .mobile-header-stack {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+  }
+
+  .mobile-wrap-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+  }
+
+  .mobile-full-width-btn {
+    width: 100% !important;
+  }
+}
+
+/* Ant design table horizontal scrolling container polish */
+.ant-table-wrapper {
+  max-width: 100%;
+}
+
+.ant-table {
+  overflow-x: auto;
+}

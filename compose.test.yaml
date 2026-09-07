@@ -1,0 +1,21 @@
+# Manual bootstrap alternative. The scripted test controller uses exact-ID docker run/rm
+# and intentionally refuses to adopt containers created manually by compose.
+# After manual startup, explicitly run db:provision then db:migrate with separate credentials.
+services:
+  db:
+    image: postgres:17.6-bookworm
+    container_name: nbcloud-task18-test-pg17
+    environment:
+      # Bootstrap administrator ONLY. Run db:provision to create non-superuser owner/runtime roles.
+      # The HTTP server must never use this bootstrap account.
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${NB_CLOUD_TEST_PASSWORD:?An explicit bootstrap password is required; never use this role as the runtime}
+      POSTGRES_DB: nbcloud_test_task18
+    ports:
+      - "127.0.0.1:55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d nbcloud_test_task18"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    restart: "no"

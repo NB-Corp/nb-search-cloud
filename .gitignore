@@ -1,0 +1,16 @@
+node_modules/
+dist/
+coverage/
+.tmp/
+.env
+.env.*
+!.env.example
+*.log
+**/.artifacts/
+**/.report/
+**/screenshots/
+**/.local/
+**/test-results/
+**/playwright-report/
+**/*.tsbuildinfo
+**/.vite/

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>nb-search 控制台</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      html, body {
+        width: 100%;
+        min-height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow-x: hidden;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+        background-color: #f4f6f8;
+        color: #1f2937;
+      }
+      #root {
+        width: 100%;
+        min-height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+      /* Focus styling for keyboard accessibility */
+      :focus-visible {
+        outline: 2px solid #0284c7;
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

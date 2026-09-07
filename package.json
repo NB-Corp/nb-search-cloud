@@ -1,0 +1,46 @@
+{
+  "name": "@nb-corp/nb-search-cloud",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TypeScript PostgreSQL foundation for nb-search cloud",
+  "type": "module",
+  "engines": {
+    "node": ">=24.15.0"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit false --declaration true --outDir dist --rootDir src",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/server.js",
+    "worker": "node dist/server.js worker",
+    "web:build": "pnpm --dir web build",
+    "db:migrate": "node dist/server.js migrate",
+    "db:provision": "node dist/cli/provision-database.js",
+    "test:identity": "vitest run test/integration/identity.integration.test.ts test/integration/identity-review.integration.test.ts test/integration/database-recovery.integration.test.ts",
+    "bootstrap-admin": "node dist/cli/bootstrap-admin.js",
+    "reset-password": "node dist/cli/reset-password.js",
+    "test:unit": "vitest run --config vitest.config.ts test/unit test/helpers",
+    "test:integration": "vitest run --config vitest.config.ts test/integration",
+    "test:execution": "pnpm build && vitest run --config vitest.config.ts test/unit/execution.test.ts test/unit/egress.test.ts test/integration/execution.integration.test.ts test/integration/provider-management.integration.test.ts test/integration/remote-execution.integration.test.ts test/integration/http-boundary.integration.test.ts",
+    "test": "pnpm build && pnpm test:unit && pnpm test:integration",
+    "test:db": "node scripts/test-db.mjs"
+  },
+  "dependencies": {
+    "@fastify/cookie": "11.1.2",
+    "@fastify/static": "8.3.0",
+    "@nb-corp/nb-search": "file:../nb-search",
+    "ipaddr.js": "2.5.0",
+    "drizzle-orm": "0.45.2",
+    "fastify": "5.12.3",
+    "pg": "8.23.0",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "@types/pg": "8.23.1",
+    "drizzle-kit": "0.31.10",
+    "tsx": "4.23.13",
+    "typescript": "6.0.3",
+    "vitest": "4.1.11"
+  }
+}
