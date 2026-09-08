@@ -6,12 +6,13 @@
 
 ## 从公开仓库构建
 
-Cloud 使用 `file:../nb-search` 引用 sibling SDK；将两个公开仓库克隆到同一父目录即可完成本地构建：
+Cloud 使用 `file:../nb-search` 引用同级 SDK。先构建 SDK，再安装 Cloud，确保安装的依赖包含 SDK 的运行文件与类型声明：
 
 ```sh
 mkdir nb-search-sources && cd nb-search-sources
 git clone https://github.com/NB-Corp/nb-search.git
 git clone https://github.com/NB-Corp/nb-search-cloud.git
+(cd nb-search && pnpm install --frozen-lockfile && pnpm build)
 cd nb-search-cloud
 pnpm install --frozen-lockfile
 pnpm --dir web install --frozen-lockfile
