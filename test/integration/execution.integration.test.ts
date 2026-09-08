@@ -64,7 +64,7 @@ describe('Stage B durable repository on real isolated PostgreSQL', () => {
 
   it('applies migration twice, enforces immutable config and tenant FKs, never returns stored secret', async () => {
     const migrationOwner = createDb((await import('../helpers/identity.js')).integrationOwnerUrl());
-    try { expect(await applyExecutionMigration(migrationOwner.pool)).toBe(2); } finally { await closeDb(migrationOwner); }
+    try { expect(await applyExecutionMigration(migrationOwner.pool)).toBe(4); } finally { await closeDb(migrationOwner); }
     const a = await fixture(); const b = await fixture();
     const config = await queryOne<{ current_config_id: string }>(db.pool, 'SELECT current_config_id FROM providers WHERE id=$1', [a.providerId]);
     const before = await providers.config(db.pool, a.tenant, config!.current_config_id);

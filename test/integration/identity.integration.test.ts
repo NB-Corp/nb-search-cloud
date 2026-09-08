@@ -81,7 +81,7 @@ describe('Stage A real PostgreSQL identity foundation', () => {
 
   it('runs the identity migration twice without changing the schema', async () => {
     const owner = createDb(integrationOwnerUrl());
-    try { await expect(runMigrations(owner.pool)).resolves.toBe(2); } finally { await closeDb(owner); }
+    try { await expect(runMigrations(owner.pool)).resolves.toBe(4); } finally { await closeDb(owner); }
     const result = await db.pool.query<{ count: string }>('SELECT count(*)::text AS count FROM schema_migrations WHERE version=1');
     expect(result.rows[0]?.count).toBe('1');
     const tables = await db.pool.query<{ table_name: string }>("SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('tenants','users','groups','user_allowed_groups','api_keys','sessions','auth_rate_buckets','audit_events') ORDER BY table_name");

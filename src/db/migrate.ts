@@ -4,9 +4,9 @@ import { fileURLToPath } from 'node:url';
 import type { Pool } from 'pg';
 import { getSchemaVersion } from './transaction.js';
 
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 4;
 const MIGRATION_LOCK_KEY = 'nb-search-cloud:identity-migrations:v1';
-const MIGRATIONS = ['0001_identity.sql', '0002_execution.sql'] as const;
+const MIGRATIONS = ['0001_identity.sql', '0002_execution.sql', '0003_provider_key_pool.sql', '0004_script_channels.sql'] as const;
 
 /** The caller must use the migration owner, not the service's runtime pool. */
 export async function runMigrations(pool: Pool): Promise<number> {

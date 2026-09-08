@@ -9,7 +9,7 @@ it('A-DB01 provisions/migrates dedicated task roles with safe query options and 
   if (!admin) throw new Error('TASK_ADMIN_REQUIRED'); assertIsTaskDatabase(admin);
   const query = (url: string, name: string) => `${url}?sslmode=disable&application_name=${name}`;
   const env = { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, DATABASE_ADMIN_URL: query(admin, 'url-admin'), MIGRATION_DATABASE_URL: query(owner, 'url-owner'), DATABASE_URL: query(runtime, 'url-runtime'), PUBLIC_ORIGIN: 'http://127.0.0.1:3000', COOKIE_MODE: 'loopback' };
-  for (const [args, marker] of [[['dist/cli/provision-database.js'], 'database_roles_provisioned'], [['dist/server.js', 'migrate'], 'schema_version=2']] as const) {
+  for (const [args, marker] of [[['dist/cli/provision-database.js'], 'database_roles_provisioned'], [['dist/server.js', 'migrate'], 'schema_version=4']] as const) {
     const child = spawn(process.execPath, [...args], { env, stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '', err = ''; child.stdout.on('data', (chunk) => { out += chunk; }); child.stderr.on('data', (chunk) => { err += chunk; });
     const code = await new Promise((resolve, reject) => { child.once('error', reject); child.once('close', resolve); });

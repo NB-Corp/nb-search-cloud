@@ -2,7 +2,9 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { SecretVault } from '../../src/execution/crypto.js';
 import { canonicalContent } from '../../src/execution/idempotency.js';
-import { endpoint, operation, providerBase, providerOptions } from '../../src/execution/catalog.js';
+import { operation, resolveChannelOperation } from '../../src/execution/catalog.js';
+import { resolveProviderOperation } from '@nb-corp/nb-search';
+import { publicUrl } from '../../src/egress/address.js';
 import { planTimeoutMaximum, resolvePlanTimeout } from '../../src/execution/plans.js';
 import type { Json } from '../../src/execution/types.js';
 
@@ -40,14 +42,13 @@ describe('execution primitives (no SDK or provider invocation)', () => {
     expect(operation('exa', 'search').kind).toBe('search');
     expect(() => operation('exa', 'synthesis')).toThrow();
     expect(() => operation('direct-http', 'fetch')).toThrow();
-    const base = providerBase('exa', 'https://provider.example/api');
-    expect(endpoint(base, 'exa', 'search', {})).toBe('https://provider.example/api/search');
-    expect(endpoint(base, 'exa', 'contents', {})).toBe('https://provider.example/api/contents');
-    expect(endpoint('https://provider.example/v1', 'grok-multi-agent', 'research', { api_mode: 'messages' })).toBe('https://provider.example/v1/messages');
-    expect(() => endpoint('https://provider.example/v1/responses', 'grok-multi-agent', 'research', { api_mode: 'messages' })).toThrow();
-    expect(() => providerOptions('exa', { search_path: '/private' })).toThrow();
-    expect(() => providerBase('exa', 'https://user:pass@provider.example')).toThrow();
-    expect(() => providerBase('exa', 'http://provider.example')).toThrow();
+    for (const [provider, op, options] of [['exa', 'search', { search_path: '/custom' }], ['exa', 'contents', {}], ['grok-multi-agent', 'research', { api_mode: 'messages' }]] as const) {
+      const base = 'https://provider.example/api';
+      expect(resolveChannelOperation(provider, op, base, options)).toEqual(resolveProviderOperation(provider, op, { provider_id: provider, enabled: true, base_url: base, options }));
+    }
+    // Network policy is Cloud's concern; adapter URL and option semantics are SDK's.
+    expect(() => publicUrl('https://user:pass@provider.example')).toThrow();
+    expect(() => publicUrl('http://provider.example')).toThrow();
   });
   it('uses GMA operation identity for async timeout defaults while keeping sync and fetch caps', () => {
     const gma = { provider_id: 'grok-multi-agent' as const, operation_id: 'research' as const };

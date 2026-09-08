@@ -1,0 +1,58 @@
+name: nb-search-cloud-local
+services:
+  db:
+    image: postgres:17.6-bookworm
+    restart: unless-stopped
+    env_file: .local/postgres.env
+    labels:
+      nbcloud.local.owner: ${NBCLOUD_LOCAL_OWNER:?Run local-deploy init first}
+    volumes:
+      - database:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d nbcloud_local"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  api:
+    image: ${NBCLOUD_LOCAL_IMAGE:-nb-search-cloud:local}
+    restart: unless-stopped
+    env_file: .local/runtime.env
+    labels:
+      nbcloud.local.owner: ${NBCLOUD_LOCAL_OWNER}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${NBCLOUD_LOCAL_PORT:-18380}:3000"
+    volumes:
+      - ./.local/channels:/app/channels:ro
+  worker:
+    image: ${NBCLOUD_LOCAL_IMAGE:-nb-search-cloud:local}
+    command: ["node", "dist/server.js", "worker"]
+    restart: unless-stopped
+    env_file: .local/runtime.env
+    labels:
+      nbcloud.local.owner: ${NBCLOUD_LOCAL_OWNER}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./.local/channels:/app/channels:ro
+  provision:
+    image: ${NBCLOUD_LOCAL_IMAGE:-nb-search-cloud:local}
+    profiles: [tools]
+    command: ["node", "dist/cli/provision-database.js"]
+    env_file: .local/provision.env
+    labels:
+      nbcloud.local.owner: ${NBCLOUD_LOCAL_OWNER}
+  migrate:
+    image: ${NBCLOUD_LOCAL_IMAGE:-nb-search-cloud:local}
+    profiles: [tools]
+    command: ["node", "dist/server.js", "migrate"]
+    env_file: .local/migration.env
+    labels:
+      nbcloud.local.owner: ${NBCLOUD_LOCAL_OWNER}
+volumes:
+  database:
+    labels:
+      nbcloud.local.owner: ${NBCLOUD_LOCAL_OWNER}

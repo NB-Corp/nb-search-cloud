@@ -90,15 +90,18 @@ export interface SessionDto {
   expires_at: string;
 }
 
+export interface ProviderPoolKey { id?: string; label: string; enabled: boolean; secret?: string }
 export interface ProviderDto {
   id: string;
   name: string;
-  provider_id: 'exa' | 'grok-multi-agent';
+  provider_id: 'exa' | 'grok-multi-agent' | 'script';
   status: EntityStatus;
   revision: number;
   base_url?: string | null;
   options?: Record<string, unknown>;
   credential_configured: boolean;
+  key_pool?: ProviderPoolKey[];
+  key_pool_selections?: string;
   credential_updated_at?: string | null;
   deleted_at?: string | null;
   created_at?: string;
@@ -113,6 +116,7 @@ export interface ProviderCatalogDto {
   }>;
   provider_options: Record<string, Record<string, unknown>>;
   credential_write_only: boolean;
+  script_channels?: { id: string; label: string }[];
 }
 
 export interface LaneDto {

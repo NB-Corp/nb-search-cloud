@@ -60,7 +60,7 @@ export const providers = pgTable('providers', {
   id: uuid('id').primaryKey(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id),
   name: varchar('name', { length: 100 }).notNull(),
-  providerId: varchar('provider_id', { length: 64 }).notNull().$type<'exa' | 'grok-multi-agent'>(),
+  providerId: varchar('provider_id', { length: 64 }).notNull().$type<'exa' | 'grok-multi-agent' | 'script'>(),
   status: varchar('status', { length: 16 }).notNull().default('active').$type<'active' | 'disabled'>(),
   currentConfigId: uuid('current_config_id'),
   revision: integer('revision').notNull().default(1),
@@ -70,7 +70,7 @@ export const providers = pgTable('providers', {
 }, (table) => [
   unique('providers_tenant_id_uq').on(table.tenantId, table.id),
   uniqueIndex('providers_name_uq').on(table.tenantId, table.name).where(sql`${table.deletedAt} IS NULL`),
-  check('providers_provider_id_check', sql`${table.providerId} IN ('exa', 'grok-multi-agent')`),
+  check('providers_provider_id_check', sql`${table.providerId} IN ('exa', 'grok-multi-agent', 'script')`),
   check('providers_status_check', sql`${table.status} IN ('active', 'disabled')`),
   check('providers_revision_check', sql`${table.revision} > 0`),
   providersCurrentForeignKey(table),
@@ -396,4 +396,24 @@ export const artifactChunks = pgTable('artifact_chunks', {
     columns: [table.tenantId, table.jobId],
     foreignColumns: [artifacts.tenantId, artifacts.jobId],
   }),
+]);
+
+export const providerConfigKeys = pgTable('provider_config_keys', {
+  id: uuid('id').primaryKey(), tenantId: uuid('tenant_id').notNull(), configId: uuid('config_id').notNull(),
+  ordinal: integer('ordinal').notNull(), label: varchar('label', { length: 100 }).notNull(),
+  enabled: customType<{ data: boolean }>({ dataType: () => 'boolean' })('enabled').notNull().default(true),
+  secretKeyId: varchar('secret_key_id', { length: 128 }).notNull(), nonce: bytea('nonce').notNull(), ciphertext: bytea('ciphertext').notNull(), authTag: bytea('auth_tag').notNull(),
+}, table => [
+  unique().on(table.configId, table.ordinal), unique().on(table.secretKeyId, table.nonce),
+  check('provider_config_keys_ordinal_check', sql`${table.ordinal} >= 0`),
+  check('provider_config_keys_nonce_check', sql`octet_length(${table.nonce})=12`),
+  check('provider_config_keys_auth_tag_check', sql`octet_length(${table.authTag})=16`),
+  check('provider_config_keys_ciphertext_check', sql`octet_length(${table.ciphertext})>0`),
+  foreignKey({ columns: [table.tenantId, table.configId], foreignColumns: [providerConfigs.tenantId, providerConfigs.id] }).onDelete('cascade'),
+]);
+export const providerKeyCounters = pgTable('provider_key_counters', {
+  tenantId: uuid('tenant_id').notNull(), configId: uuid('config_id').primaryKey(), selections: bigint('selections', { mode: 'bigint' }).notNull().default(0n),
+}, table => [
+  check('provider_key_counters_selections_check', sql`${table.selections} >= 0`),
+  foreignKey({ columns: [table.tenantId, table.configId], foreignColumns: [providerConfigs.tenantId, providerConfigs.id] }).onDelete('cascade'),
 ]);

@@ -16,7 +16,7 @@ function run(args: string[], password?: string, migrate = false) {
   });
 }
 it('compiled migrate, bootstrap and reset succeed on restricted PG without HTTP/Cookie/master-key configuration', async () => {
-  expect(run(['dist/server.js', 'migrate'], undefined, true)).toContain('schema_version=2');
+  expect(run(['dist/server.js', 'migrate'], undefined, true)).toContain('schema_version=4');
   const slug = `offline-${randomUUID()}`, password = 'Offline-initial-fixture-123', replacement = 'Offline-replacement-fixture-456';
   const args = ['--tenant', slug, '--username', 'admin', '--password-stdin'];
   const created = run(['dist/cli/bootstrap-admin.js', ...args], password);

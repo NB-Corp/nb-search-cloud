@@ -15,7 +15,10 @@ export async function capabilities(tx: PoolClient, principal: ServicePrincipal, 
   const descriptors = builtInProviderRegistrations().map((registration) => registration.descriptor).filter((descriptor) => lanes.some((lane) => lane.provider_kind === descriptor.provider_id));
   const providers: CapabilityEnvelope['providers'] = {
     descriptors: descriptors.map((descriptor) => ({ ...descriptor, option_keys: [], query_operations: descriptor.query_operations.filter((op) => lanes.some((lane) => lane.provider_kind === descriptor.provider_id && lane.operation_id === op.operation_id)).map((op) => ({ ...op })), fetch_operations: descriptor.fetch_operations.filter((op) => lanes.some((lane) => lane.provider_kind === descriptor.provider_id && lane.operation_id === op.operation_id)).map((op) => ({ ...op, input_kinds: ['url'], execution_modes: ['sync'], media_types: [...op.media_types], representations: [...op.representations], stages: op.stages.map((stage) => ({ ...stage })) })) })),
-    instances: [...new Map(lanes.map((lane) => [lane.provider_id, lane])).values()].map((lane) => ({ id: lane.provider_id, provider_id: lane.provider_kind, enabled: lane.provider_status === 'active' && !lane.provider_deleted_at, availability: providerAvailable(lane) ? 'ready' : 'unavailable', issues: providerAvailable(lane) ? [] : [{ code: 'CLOUD_EGRESS_UNVERIFIED' }], credential: { requirement: 'required', configured: lane.secret_key_id !== null }, endpoint: { requirement: 'required', configured: true } })),
+    instances: [...new Map(lanes.map((lane) => [lane.provider_id, lane])).values()].map((lane) => {
+      const activation = descriptors.find(descriptor => descriptor.provider_id === lane.provider_kind)!.activation;
+      return { id: lane.provider_id, provider_id: lane.provider_kind, enabled: lane.provider_status === 'active' && !lane.provider_deleted_at, availability: providerAvailable(lane) ? 'ready' : 'unavailable', issues: providerAvailable(lane) ? [] : [{ code: 'CLOUD_EGRESS_UNVERIFIED' }], credential: { requirement: activation.credential, configured: lane.secret_key_id !== null }, endpoint: { requirement: activation.endpoint, configured: activation.endpoint !== 'required' || !!lane.base_url } };
+    }),
   };
   const searchLanes = lanes.filter((lane) => lane.kind === 'search');
   const fetchLanes = lanes.filter((lane) => lane.kind === 'fetch');
@@ -29,7 +32,12 @@ export async function capabilities(tx: PoolClient, principal: ServicePrincipal, 
     },
     fetch: { default_representation: 'markdown', inputs: [{ kind: 'url', enabled: true, max_bytes: 2_097_152 }, { kind: 'inline_text', enabled: false, max_bytes: 0 }, { kind: 'inline_bytes', enabled: false, max_bytes: 0 }, { kind: 'file', enabled: false, max_bytes: 0 }],
       chains: identity.group.default_fetch_pipeline && fetchLanes.some((lane) => lane.id === identity.group.default_fetch_pipeline) ? [{ input_kind: 'url', representation: 'markdown', pipelines: [identity.group.default_fetch_pipeline] }, { input_kind: 'url', representation: 'text', pipelines: [identity.group.default_fetch_pipeline] }] : [],
-      pipelines: fetchLanes.map((lane) => ({ id: lane.id, input_kinds: ['url'], media_types: ['text/html', 'text/plain', 'text/markdown'], representations: ['markdown', 'text'], execution_modes: modes('fetch', available(lane)), egress: 'url', stages: [{ id: 'remote.acquire', role: 'acquire' }, { id: 'content.extract', role: 'extract' }], availability: available(lane) ? 'ready' : 'unavailable', issues: available(lane) ? [] : [{ code: 'CLOUD_EGRESS_UNVERIFIED' }], latency: lane.latency, cost: lane.cost })),
+      pipelines: fetchLanes.map((lane) => {
+        const selected = operation(lane.provider_kind, lane.operation_id);
+        if (selected.kind !== 'fetch') throw new Error('FETCH_OPERATION_REQUIRED');
+        const descriptor = selected.descriptor;
+        return { id: lane.id, input_kinds: ['url'], media_types: [...descriptor.media_types], representations: [...descriptor.representations], execution_modes: modes('fetch', available(lane)), egress: descriptor.egress, stages: descriptor.stages.map(stage => ({ ...stage })), availability: available(lane) ? 'ready' : 'unavailable', issues: available(lane) ? [] : [{ code: 'CLOUD_EGRESS_UNVERIFIED' }], latency: lane.latency, cost: lane.cost };
+      }),
       limits: { max_source_bytes: 2_097_152, max_response_bytes: 2_097_152, max_content_chars: 200_000, max_redirects: 0, max_timeout_ms: LIMITS.maxSyncTimeoutMs, max_inline_bytes: LIMITS.inlineBytes },
     },
     jobs: { result_ttl_seconds: LIMITS.ttlSeconds, cancel_supported: true },

@@ -1,4 +1,5 @@
 import type { PoolClient } from 'pg';
+import { compatibleSdkVersion } from './sdk-version.js';
 import { queryRows } from '../db/transaction.js';
 import { operation, type ProviderId } from './catalog.js';
 import { BusinessRejection, ExecutionError } from './errors.js';
@@ -8,7 +9,7 @@ import type { ExecutionGroup } from './policy.js';
 export interface AvailableLane {
   id: string; kind: Kind; provider_id: string; operation_id: string; status: string; latency: SelectedOperation['latency']; cost: SelectedOperation['cost']; evidence_groups: string[];
   units_per_query: number; provider_kind: ProviderId; provider_status: string; provider_deleted_at: Date | null;
-  config_id: string; sdk_version: string; adapter_version: string; secret_key_id: string | null; base_url: string; options: Record<string, string>;
+  config_id: string; sdk_version: string; adapter_version: string; secret_key_id: string | null; base_url: string; options: Record<string, unknown>;
 }
 export async function groupLanes(tx: PoolClient, tenantId: string, groupId: string): Promise<AvailableLane[]> {
   return queryRows<AvailableLane>(tx, `SELECT l.*,gl.units_per_query,p.provider_id AS provider_kind,p.status AS provider_status,p.deleted_at AS provider_deleted_at,
@@ -51,7 +52,7 @@ export async function buildPlan(tx: PoolClient, tenantId: string, group: Executi
   const selected: SelectedOperation[] = ids.map((id) => {
     const lane = all.find((item) => item.id === id && item.kind === kind);
     if (!lane) throw new ExecutionError('FORBIDDEN');
-    if (lane.status !== 'active' || lane.provider_status !== 'active' || lane.provider_deleted_at || !ready(lane) || lane.sdk_version !== sdkVersion) throw new BusinessRejection('LANE_NOT_CONFIGURED', 'Selected lane is unavailable.');
+    if (lane.status !== 'active' || lane.provider_status !== 'active' || lane.provider_deleted_at || !ready(lane) || !compatibleSdkVersion(lane.sdk_version, sdkVersion)) throw new BusinessRejection('LANE_NOT_CONFIGURED', 'Selected lane is unavailable.');
     const descriptor = operation(lane.provider_kind, lane.operation_id);
     return { lane_id: lane.id, kind, provider_resource_id: lane.provider_id, provider_config_id: lane.config_id, provider_id: lane.provider_kind,
       operation_id: descriptor.operation_id, adapter_version: lane.adapter_version, output: { ...descriptor.output }, units_per_query: lane.units_per_query, latency: lane.latency, cost: lane.cost, evidence_groups: lane.evidence_groups };

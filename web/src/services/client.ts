@@ -278,7 +278,7 @@ export const api = {
       const qs = query.toString();
       return request<{ items: ProviderDto[]; next_cursor?: string | null }>(`/api/admin/providers${qs ? `?${qs}` : ''}`);
     },
-    create: async (payload: { name: string; provider_id: 'exa' | 'grok-multi-agent'; base_url?: string; options?: Record<string, unknown>; secret?: string }): Promise<ProviderDto> => {
+    create: async (payload: { name: string; provider_id: 'exa' | 'grok-multi-agent' | 'script'; base_url?: string; options?: Record<string, unknown>; secret?: string }): Promise<ProviderDto> => {
       return request<ProviderDto>('/api/admin/providers', {
         method: 'POST',
         body: JSON.stringify(payload),
@@ -287,7 +287,7 @@ export const api = {
     get: async (id: string): Promise<ProviderDto> => {
       return request<ProviderDto>(`/api/admin/providers/${id}`);
     },
-    patch: async (id: string, payload: { expected_revision: number; name?: string; status?: 'active' | 'disabled'; base_url?: string; options?: Record<string, unknown>; secret?: string; clear_secret?: boolean }): Promise<ProviderDto> => {
+    patch: async (id: string, payload: { expected_revision: number; name?: string; status?: 'active' | 'disabled'; base_url?: string; options?: Record<string, unknown>; secret?: string; clear_secret?: boolean; key_pool?: import('../types/api.js').ProviderPoolKey[] }): Promise<ProviderDto> => {
       return request<ProviderDto>(`/api/admin/providers/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(payload),

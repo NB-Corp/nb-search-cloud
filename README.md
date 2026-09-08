@@ -6,7 +6,7 @@
 
 ## 从公开仓库构建
 
-Cloud 使用 `file:../nb-search` 引用同级 SDK。先构建 SDK，再安装 Cloud，确保安装的依赖包含 SDK 的运行文件与类型声明：
+Cloud 使用 `file:../nb-search` 引用同级 SDK，当前已验证的构建版本为 **SDK 0.4.0**；旧版缺少所需的 script provider 与公开 host helper，未验证的后续版本不自动视为兼容。请先将同级 SDK 源码切换到 0.4.0 对应版本，再构建 SDK、安装 Cloud，确保安装的依赖包含 SDK 的运行文件与类型声明：
 
 ```sh
 mkdir nb-search-sources && cd nb-search-sources
@@ -42,13 +42,14 @@ pnpm web:build
 
 ## 当前支持的云端源目录
 
-当前云端执行目录（`src/execution/catalog.ts`）内置支持以下操作，不同于本地 SDK 的全量清单：
+当前云端策略目录（`src/execution/catalog.ts`）允许以下 SDK 操作，不同于本地 SDK 的全量清单；操作描述、参数校验与端点解析由 SDK 提供：
 
 | Provider | 操作标识 | 类别与输出 Schema | 说明与配置项 |
 |---|---|---|---|
 | `exa` | `search` | 搜索 (`nb-search.results@1`) | 默认端点 `https://api.exa.ai`，需配置 Exa API Key |
 | `exa` | `contents` | 抓取 (`nb-search.fetch@1`) | URL 内容提取，复用 Exa 凭据 |
 | `grok-multi-agent` | `research` | 搜索 (`nb-search.multi-agent-research@1`) | 深度多代理推演。需配置 API Key 与专用 Base URL，支持 `api_mode`（`chat_completions` 或 `messages`）、`reasoning_effort` 与 `model`。端点后缀必须与模式匹配 |
+| `script` | `search` | 搜索 (`nb-search.results@1`) | 部署者通过 `CLOUD_SCRIPT_CHANNELS` 注册可信本地模块；租户选择 `channel_id` 并设置 JSON `params`，凭据可选。支持 sync/async，与 worker 同权限，不是沙箱 |
 
 ---
 
@@ -135,7 +136,7 @@ docker run --rm \
   nb-search-cloud:local node dist/server.js migrate
 ```
 
-迁移完成后输出 `schema_version=2`，并自动收回 runtime 角色对迁移记录表的写权限。此后 `MIGRATION_DATABASE_URL` 即可从部署环境中移除。
+迁移完成后输出 `schema_version=4`，并自动收回 runtime 角色对迁移记录表的写权限。此后 `MIGRATION_DATABASE_URL` 即可从部署环境中移除。
 
 ---
 
@@ -301,3 +302,55 @@ const result = await client.search({
    - 产物在成功发布后默认保留 72 小时，过期后系统自动清理。
 4. **平滑停机**：
    - API 与 Worker 进程均监听 `SIGINT` 与 `SIGTERM` 信号，停机时安全终止调度循环并关闭数据库连接池。
+
+## 本机 Docker 快速部署
+
+在 cloud 目录运行 `node scripts/local-deploy.mjs init 18380`，再从 `systems/` 构建镜像：
+
+```sh
+docker build -f nb-search-cloud/Dockerfile -t nb-search-cloud:local .
+```
+
+回到 cloud 目录执行 `node scripts/local-deploy.mjs start`。脚本建立独立 `nb-search-cloud-local` Compose 项目，初始化专用 PostgreSQL 17 数据卷、migration owner 与受限 runtime 角色，启动 API 和 worker 后保持服务运行。数据库不发布宿主端口；管理页面只发布到 `http://127.0.0.1:18380`。端口占用时，在首次 init 指定其它空闲端口。
+
+- 管理员：租户 `local`、用户名 `admin`。随机密码在 `.local/admin.json`，不是默认密码。
+- `.local/` 保存数据库密码、加密主密钥、部署资源记录与本机客户端凭证，已被 Git/Docker context 排除；备份数据卷时也要备份主密钥。不要把该目录分享给其他人。
+- `node scripts/local-deploy.mjs status` 显示本项目资源；start 校验资源归属，不会清理其它应用。不要删除数据库卷来升级镜像。
+- 本机模式的 Cookie Origin 必须为 loopback HTTP；容器内部可监听 `0.0.0.0`，宿主发布必须保持 `127.0.0.1`。公网使用仍应配置 HTTPS Origin 与 production Cookie。
+
+如需把当前用户已有的本机 SDK 配置导入这个独立云端，显式运行 `pnpm exec tsx scripts/local-import.ts`。它通过 sibling SDK 的既有配置 loader 读取有效配置，只导入兼容的 Exa/GMA 实例；不修改源配置，不打印密钥，不改变 base URL 或 api_mode。不支持的来源/选项写入跳过报告 `.local/import-report.json`。此源码工具不是 SDK 公共 API。导入后无需复制 token：
+
+```sh
+node scripts/local-client.mjs capabilities
+node scripts/local-client.mjs search --stdin
+```
+
+客户端只使用 `.local/client-home` 的 remote profile，不更改个人 SDK HOME。`scripts/local-real-check.mjs exa|gma` 是会产生真实上游费用的验收命令：每项只提交一次 run，后续只轮询/读取；已有尝试记录时不自动重试。不要把它当无费用健康检查。
+
+## 一个供应商使用多个上游 Key
+
+供应商列表的“上游 Key 池”可添加、命名、启用/禁用、替换和移除上游密钥。已有密钥留空保留，永不回显；保存新列表会替换该供应商当前池。旧 `secret` 输入仍可用，使用 `secret` 更新会回到单密钥配置。
+
+API 的 `key_pool` 是 `{label, secret, enabled}` 数组；更新已有项可传返回的 `id` 并省略 `secret`。它与 `secret`、`clear_secret:true` 互斥。空数组清除凭据，禁用全部 key 后网络供应商不可调度。这是上游账户池，与用户签发的下游 API Key 不同。
+
+每个 key 独立加密，列表附着于不可变 provider config。多个 worker 用数据库原子 counter 轮询启用项，不在单次请求失败后自动换 key 或重发计费请求。返回的 `key_pool_selections` 是当前配置选择次数，不是计费次数；更新池创建新配置并重置此 counter。已排队任务继续引用旧配置/旧池，因此停用整个供应商适用于需要立即阻止待执行请求的情形。
+
+## 部署者可信脚本通道
+
+使用 SDK 0.4.0 或已明确兼容的构建。Cloud 的操作描述、参数/default 校验及适配器 URL 都来自 SDK registry 和 `resolveProviderOperation`；Cloud 只负责允许哪些通道、部署模块映射、认证/key 池、配额与出站策略，不自行实现搜索协议或结果解析。API 和 worker 配置同一个 `CLOUD_SCRIPT_CHANNELS` JSON 文件，模块文件只读挂载到两者可见的相同路径。示例：
+
+```json
+{"channels":[{"id":"local-notes","label":"本机资料","module":"./notes.mjs","params":{"collection":"public"},"endpoints":[]}]}
+```
+
+模块路径相对 manifest 所在目录解析，也可用绝对路径。部署者更改模块/注册表后重启 API/worker；模块代码不由数据库保存版本，旧任务也会使用部署者当前代码。租户不能上传脚本或指定服务器路径，只能选择已注册 `channel_id` 并设置 JSON `params` 或可选 secret。创建供应商使用 `provider_id:"script"`、`options:{"channel_id":"local-notes","params":{}}`，通道使用 `operation_id:"search"`；支持云端 sync 和 async job。
+
+模块导出 `execute(request, context)`，或 `search(query, context)`，返回 `{title,url,...}` 结果数组。`context.options` 是合并后的 params，可选凭据在 `context.credential`，另有 `signal`、`logger`、`transport`。如使用 Cloud 注入的 HTTP transport，应在 manifest 的 `endpoints` 声明允许的完整公开 HTTPS POST 请求端点；它继续遵守出站和调用预算。脚本也能直接使用 Node 能力，**与 worker 同权限，不是沙箱**：只运行部署者信任的代码，不把租户参数拼进 shell/SQL。脚本自身若发多次请求会产生相应上游费用，Cloud 不替脚本实施自动重试。
+
+可用 `node scripts/local-script-demo.mjs install` 安装无网络的示例模块，再重启本机 API/worker 后执行 `node scripts/local-script-demo.mjs check`。它配置 `script.local-demo` 通道并验证 sync、async、get/read；不会调用 Exa/GMA 或产生上游费用。Cloud 仍按任务扣减普通 execution units。已安装示例后，也可在 CLI 的 `search --stdin` 输入：
+
+```json
+{"action":"run","lane":"script.local-demo","query":"Hello from my script"}
+```
+
+这是本机计算示例，不是外网搜索结果。通道参数可在供应商页的“脚本参数”修改；模块代码仍由部署者管理。

@@ -28,7 +28,7 @@ describe('cloud async timeout bridge seams', () => {
   it('prepares and dispatches a 600-second GMA search without applying the fetch 120-second schema', async () => {
     const root = await mkdtemp(join(tmpdir(), 'nb-search-cloud-timeout-')); roots.push(root);
     const config = { id: 'provider-config', tenant_id: 'tenant', provider_id: 'provider-resource', version: 1, sdk_version: 'sdk', adapter_version: '2', base_url: 'https://relay.example/v1', options: { model: 'grok-4.20-multi-agent-xhigh', reasoning_effort: 'xhigh', api_mode: 'chat_completions' }, secret_key_id: 'secret', nonce: Buffer.alloc(12), ciphertext: Buffer.alloc(1), auth_tag: Buffer.alloc(16), credential_updated_at: null, created_at: new Date() };
-    const providers = { config: async () => config, decrypt: () => 'fake-provider-secret' } as unknown as ProviderService;
+    const providers = { config: async () => config, selectSecret: async () => 'fake-provider-secret' } as unknown as ProviderService;
     const seen: Array<{ maximum: number; signal: AbortSignal }> = [];
     const io: PinnedIo = { async request(input) { seen.push({ maximum: input.maximum, signal: input.signal }); return { status: 200, headers: {}, bytes: Buffer.from(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ answer: 'bridge ok', results: [] }) } }] }), 'utf8') }; } };
     const resolver: Resolver = async () => ['93.184.216.34'];

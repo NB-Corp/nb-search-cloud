@@ -1,50 +1,35 @@
-import { z } from 'zod';
+import { builtInProviderRegistrations, resolveProviderOperation } from '@nb-corp/nb-search';
 import { appError } from '../errors.js';
 import type { Kind } from './types.js';
+import type { ScriptChannels } from './script-channels.js';
 
-export const SUPPORTED_OPERATIONS = Object.freeze([
-  { provider_id: 'exa', operation_id: 'search', kind: 'search', adapter_version: '1', output: { channel: 'results', schema_id: 'nb-search.results@1' } },
-  { provider_id: 'exa', operation_id: 'contents', kind: 'fetch', adapter_version: '1', output: { channel: 'results', schema_id: 'nb-search.fetch@1' } },
-  { provider_id: 'grok-multi-agent', operation_id: 'research', kind: 'search', adapter_version: '2', output: { channel: 'typed', schema_id: 'nb-search.multi-agent-research@1' } },
-] as const);
-export type ProviderId = 'exa' | 'grok-multi-agent';
-const modelSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/);
-const gmaOptions = z.object({ model: modelSchema.default('grok-4.20-multi-agent-xhigh'), reasoning_effort: z.enum(['low', 'medium', 'high', 'xhigh']).default('xhigh'), api_mode: z.enum(['chat_completions', 'messages']).default('chat_completions') }).strict();
-
-export function operation(providerId: string, operationId: string) {
-  const found = SUPPORTED_OPERATIONS.find((item) => item.provider_id === providerId && item.operation_id === operationId);
+// Cloud deployment policy, not another provider registry. Do not enable every SDK adapter.
+const allowed = [['exa', 'search'], ['exa', 'contents'], ['grok-multi-agent', 'research'], ['script', 'search']] as const;
+export type ProviderId = typeof allowed[number][0];
+const registrations = builtInProviderRegistrations();
+export const SUPPORTED_OPERATIONS = Object.freeze(allowed.map(([provider_id, operation_id]) => {
+  const provider = registrations.find(entry => entry.descriptor.provider_id === provider_id)?.descriptor;
+  const query = provider?.query_operations.find(entry => entry.operation_id === operation_id);
+  const fetch = provider?.fetch_operations.find(entry => entry.operation_id === operation_id);
+  if (!provider || !query && !fetch) throw new Error('CLOUD_SDK_OPERATION_MISSING');
+  const common = { provider_id, operation_id, adapter_version: provider.adapter_version };
+  if (query) return { ...common, kind: 'search' as const, descriptor: query, output: query.output };
+  return { ...common, kind: 'fetch' as const, descriptor: fetch!, output: { channel: 'results' as const, schema_id: fetch!.schema_id } };
+}));
+export function operation(providerId: string, operationId?: string) {
+  const found = SUPPORTED_OPERATIONS.find(item => item.provider_id === providerId && (operationId === undefined || item.operation_id === operationId));
   if (!found) throw appError('VALIDATION_FAILED');
   return found;
 }
-export function providerOptions(providerId: ProviderId, input: unknown): Record<string, string> {
-  const parsed = (providerId === 'exa' ? z.object({}).strict() : gmaOptions).safeParse(input ?? {});
-  if (!parsed.success) throw appError('VALIDATION_FAILED');
-  return parsed.data;
-}
-/** Syntax only; the transport independently classifies every resolved address at execution. */
-export function providerBase(providerId: ProviderId, value: string | undefined): string {
-  if (value === undefined && providerId === 'grok-multi-agent') throw appError('VALIDATION_FAILED');
-  const raw = value ?? 'https://api.exa.ai';
-  try {
-    if (raw !== raw.trim() || raw.length > 2048 || /[\u0000-\u0020\u007f\\]/u.test(raw)) throw new Error();
-    const url = new URL(raw);
-    if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || !url.hostname) throw new Error();
-    const parts = url.pathname.split('/');
-    if (parts.some((part) => /[/%\\]/.test(decodeURIComponent(part)))) throw new Error();
-    if (providerId === 'exa' && /\/(search|contents)\/?$/.test(url.pathname)) throw new Error();
-    return url.toString().replace(/\/$/, '');
-  } catch { throw appError('VALIDATION_FAILED'); }
-}
-export function endpoint(baseUrl: string, providerId: ProviderId, operationId: string, options: Record<string, string>): string {
+/** SDK owns validation, defaults and exact adapter URLs. Cloud supplies only operator
+ * script resolution and checks the returned targets separately against its network policy. */
+export function resolveChannelOperation(providerId: ProviderId, operationId: string, base: string | undefined, options: Record<string, unknown>, scripts?: ScriptChannels) {
   operation(providerId, operationId);
-  const url = new URL(baseUrl);
-  const path = url.pathname.replace(/\/+$/, '');
-  const suffix = providerId === 'exa' ? `/${operationId}` : options['api_mode'] === 'messages' ? '/messages' : '/chat/completions';
-  if (providerId === 'grok-multi-agent') {
-    const configured = ['/chat/completions', '/messages', '/responses'].find((item) => path.endsWith(item));
-    if (configured && configured !== suffix) throw appError('VALIDATION_FAILED');
-  }
-  url.pathname = path.endsWith(suffix) ? path : `${path}${suffix}`;
-  return url.toString();
+  try {
+    const script = providerId === 'script' ? scripts?.resolve(options) : undefined;
+    if (providerId === 'script' && !script) throw Error('SCRIPT_NOT_REGISTERED');
+    const resolved = resolveProviderOperation(providerId, operationId, { provider_id: providerId, enabled: true, ...(base ? { base_url: base } : {}), options: script?.options ?? options });
+    return { ...resolved, endpoints: script ? [...resolved.endpoints, ...script.endpoints] : resolved.endpoints };
+  } catch { throw appError('VALIDATION_FAILED'); }
 }
 export function modes(kind: Kind, ready: boolean): ('sync' | 'async')[] { return !ready ? [] : kind === 'search' ? ['sync', 'async'] : ['sync']; }

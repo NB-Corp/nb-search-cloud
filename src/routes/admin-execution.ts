@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { builtInProviderRegistrations } from '@nb-corp/nb-search';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { PoolClient } from 'pg';
 import { z } from 'zod';
@@ -14,7 +15,8 @@ import type { ExecutionStore } from '../execution/store.js';
 
 const uuid = z.string().uuid();
 const idSchema = z.object({ id: uuid }).strict();
-const providerCreate = z.object({ name: z.string().trim().min(1).max(100), provider_id: z.enum(['exa', 'grok-multi-agent']), base_url: z.string().max(2048).optional(), options: z.record(z.string(), z.unknown()).optional(), secret: z.string().min(1).max(8192).optional() }).strict();
+const keyPool = z.array(z.object({ id: uuid.optional(), label: z.string().trim().min(1).max(100).optional(), secret: z.string().min(1).max(8192).optional(), enabled: z.boolean().optional() }).strict()).max(32);
+const providerCreate = z.object({ name: z.string().trim().min(1).max(100), provider_id: z.enum(['exa', 'grok-multi-agent', 'script']), base_url: z.string().max(2048).optional(), options: z.record(z.string(), z.unknown()).optional(), secret: z.string().min(1).max(8192).optional(), key_pool: keyPool.optional() }).strict();
 const providerPatch = providerCreate.omit({ provider_id: true }).partial().extend({ expected_revision: z.number().int().positive(), status: z.enum(['active', 'disabled']).optional(), clear_secret: z.boolean().optional() }).strict();
 const laneCreate = z.object({ id: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/), provider_id: uuid, operation_id: z.enum(['search', 'contents', 'research']), latency: z.enum(['fast', 'medium', 'slow']), cost: z.enum(['free', 'cheap', 'expensive']), evidence_groups: z.array(z.string().trim().min(1).max(128)).max(32).default([]) }).strict();
 const capabilitiesInput = z.object({ expected_revision: z.number().int().positive(), lanes: z.array(z.object({ lane_id: z.string().min(1).max(256), units_per_query: z.number().int().min(1).max(1_000_000) }).strict()).max(64), default_search_lane: z.string().max(256).nullable(), default_fetch_pipeline: z.string().max(256).nullable(), presets: z.record(z.string().min(1).max(256), z.array(z.string().min(1).max(256)).min(1).max(64)) }).strict();
@@ -48,7 +50,7 @@ function cursor(value: string | undefined): [string, string] | null {
 
 export function registerAdminExecutionRoutes(app: FastifyInstance, providers: ProviderService, store: ExecutionStore, ready: LaneReady): void {
   app.get('/api/admin/providers/catalog', async (request, reply) => {
-    try { return sendData(reply, await readSession(request, true, async () => ({ operations: SUPPORTED_OPERATIONS, provider_options: { exa: {}, 'grok-multi-agent': { model: 'string', reasoning_effort: ['low', 'medium', 'high', 'xhigh'], api_mode: ['chat_completions', 'messages'] } }, credential_write_only: true }))); }
+    try { return sendData(reply, await readSession(request, true, async () => ({ operations: SUPPORTED_OPERATIONS, script_channels: providers.scripts.list(), provider_options: Object.fromEntries(builtInProviderRegistrations().filter(({ descriptor }) => SUPPORTED_OPERATIONS.some((item) => item.provider_id === descriptor.provider_id)).map(({ descriptor }) => [descriptor.provider_id, [...descriptor.option_keys]])), credential_write_only: true }))); }
     catch (error) { return sendRequestError(reply, error); }
   });
   app.get('/api/admin/providers', async (request, reply) => {

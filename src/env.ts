@@ -71,7 +71,8 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): CloudEnv {
     throw new EnvConfigError('COOKIE_MODE=production requires an HTTPS PUBLIC_ORIGIN');
   }
   const host = source['HOST'] ?? (modeRaw === 'loopback' ? '127.0.0.1' : '0.0.0.0');
-  if (modeRaw === 'loopback' && !LOOPBACK_HOSTS.has(host.replace(/^\[|\]$/g, ''))) throw new EnvConfigError('COOKIE_MODE=loopback requires a loopback HOST');
+  // Cookie trust follows the browser origin, not the container's internal bind address.
+  // Operators exposing loopback mode through Docker must publish only to host loopback.
   const port = parsePositiveInt(source, 'PORT', 3000, 65535);
   return {
     databaseUrl,

@@ -2,11 +2,12 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { createNbSearchRuntime, parseConfigPatch, type CanonicalConfigPatch, type FetchRunSyncEnvelope, type SearchRunSyncEnvelope } from '@nb-corp/nb-search';
 import type { DbHandle } from '../db/client.js';
-import { endpoint } from './catalog.js';
+import { resolveChannelOperation } from './catalog.js';
 import { ProviderService } from './providers.js';
 import { CloudPinnedHttpTransport, type PinnedIo } from '../egress/transport.js';
 import { publicUrl, resolvePinned, type Resolver } from '../egress/address.js';
 import type { FrozenPlan } from './types.js';
+import { compatibleSdkVersion } from './sdk-version.js';
 
 export interface PreparedExecution { execute(signal: AbortSignal): Promise<SearchRunSyncEnvelope | FetchRunSyncEnvelope> }
 export interface ExecutionBridge { prepare(plan: FrozenPlan, signal: AbortSignal): Promise<PreparedExecution> }
@@ -23,7 +24,7 @@ export class SdkExecutionBridge implements ExecutionBridge {
   }
   async close(): Promise<void> { await rm(this.privateHome, { recursive: true, force: true }); }
   async prepare(plan: FrozenPlan, signal: AbortSignal): Promise<PreparedExecution> {
-    if (plan.version !== 1 || plan.sdk_version !== this.options.sdkVersion || plan.selected.length === 0) throw new Error('EXECUTION_VERSION_UNAVAILABLE');
+    if (plan.version !== 1 || !compatibleSdkVersion(plan.sdk_version, this.options.sdkVersion) || plan.selected.length === 0) throw new Error('EXECUTION_VERSION_UNAVAILABLE');
     const env: NodeJS.ProcessEnv = { NB_SEARCH_HOME: this.privateHome, NB_SEARCH_JOBS_ROOT: resolve(this.privateHome, 'unused-jobs') };
     const instances: Record<string, unknown> = {};
     const credentials: Record<string, unknown> = {};
@@ -32,17 +33,21 @@ export class SdkExecutionBridge implements ExecutionBridge {
     let credentialIndex = 0;
     for (const selected of plan.selected) {
       const config = await this.options.providers.config(this.options.db.pool, plan.selected.length ? planTenant(plan) : '', selected.provider_config_id);
-      if (config.sdk_version !== plan.sdk_version || config.adapter_version !== selected.adapter_version || config.provider_id !== selected.provider_resource_id) throw new Error('EXECUTION_VERSION_UNAVAILABLE');
-      const target = endpoint(config.base_url, selected.provider_id, selected.operation_id, config.options);
-      publicUrl(target);
-      endpoints.push(target);
-      const credential = this.options.providers.decrypt(config);
-      if (!credential) throw new Error('CREDENTIAL_UNAVAILABLE');
-      const slot = `credential.${selected.provider_resource_id}`;
-      const environmentName = `NBC_CREDENTIAL_${credentialIndex++}`;
-      env[environmentName] = credential;
-      credentials[slot] = { provider_id: selected.provider_id, env: environmentName };
-      instances[selected.provider_resource_id] = { provider_id: selected.provider_id, enabled: true, credential_slot_id: slot, base_url: config.base_url, options: config.options };
+      if (!compatibleSdkVersion(config.sdk_version, plan.sdk_version) || config.adapter_version !== selected.adapter_version || config.provider_id !== selected.provider_resource_id) throw new Error('EXECUTION_VERSION_UNAVAILABLE');
+      const resolved = resolveChannelOperation(selected.provider_id, selected.operation_id, config.base_url || undefined, config.options, this.options.providers.scripts);
+      if (resolved.provider.provider_id !== selected.provider_id || resolved.provider.adapter_version !== selected.adapter_version || resolved.kind !== selected.kind || resolved.operation.operation_id !== selected.operation_id) throw new Error('EXECUTION_VERSION_UNAVAILABLE');
+      for (const target of resolved.endpoints) { publicUrl(target); endpoints.push(target); }
+      if (!instances[selected.provider_resource_id]) {
+        const credential = await this.options.providers.selectSecret(this.options.db.pool, config);
+        if (!credential && selected.provider_id !== 'script') throw new Error('CREDENTIAL_UNAVAILABLE');
+        const slot = `credential.${selected.provider_resource_id}`;
+        if (credential) {
+          const environmentName = `NBC_CREDENTIAL_${credentialIndex++}`;
+          env[environmentName] = credential;
+          credentials[slot] = { provider_id: selected.provider_id, env: environmentName };
+        }
+        instances[selected.provider_resource_id] = { ...resolved.instance, ...(credential ? { credential_slot_id: slot } : {}) };
+      }
       lanes[selected.lane_id] = { provider_instance_id: selected.provider_resource_id, operation_id: selected.operation_id, latency: selected.latency, cost: selected.cost, ...(selected.evidence_groups.length ? { evidence_groups: selected.evidence_groups } : {}) };
     }
     if (plan.kind === 'fetch') {

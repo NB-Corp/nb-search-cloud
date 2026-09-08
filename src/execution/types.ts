@@ -9,7 +9,7 @@ export interface SelectedOperation {
   kind: Kind;
   provider_resource_id: string;
   provider_config_id: string;
-  provider_id: 'exa' | 'grok-multi-agent';
+  provider_id: 'exa' | 'grok-multi-agent' | 'script';
   operation_id: 'search' | 'contents' | 'research';
   adapter_version: string;
   output: { channel: 'results' | 'typed'; schema_id: string };

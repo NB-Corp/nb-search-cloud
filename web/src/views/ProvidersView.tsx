@@ -32,6 +32,8 @@ import {
 import { api, ApiClientError } from '../services/client.js';
 import type { LaneDto, ProviderCatalogDto, ProviderDto } from '../types/api.js';
 import { ErrorRecovery } from '../components/ErrorRecovery.js';
+import { ProviderKeyPoolEditor } from '../components/ProviderKeyPoolEditor.js';
+import { ScriptProviderEditor } from '../components/ScriptProviderEditor.js';
 import dayjs from 'dayjs';
 
 const { Text } = Typography;
@@ -296,7 +298,7 @@ export function ProvidersView() {
           <Tag color="success" icon={<CheckCircleOutlined />}>
             凭据已就绪
           </Tag>
-        ) : (
+        ) : record.provider_id === 'script' ? <Tag>可选凭据：未设置</Tag> : (
           <Tag color="warning" icon={<CloseCircleOutlined />}>
             未配置凭据
           </Tag>
@@ -317,7 +319,7 @@ export function ProvidersView() {
       title: '服务端点 (Base URL)',
       dataIndex: 'base_url',
       key: 'base_url',
-      render: (url: string | null) => (url ? <Text code>{url}</Text> : <Text type="secondary">官方默认地址</Text>),
+      render: (url: string | null, record) => record.provider_id === 'script' ? <Text type="secondary">部署者注册的本地模块</Text> : (url ? <Text code>{url}</Text> : <Text type="secondary">SDK 默认地址</Text>),
     },
     {
       title: '版本号',
@@ -336,9 +338,10 @@ export function ProvidersView() {
       key: 'actions',
       render: (_, record) => (
         <Space size={8}>
-          <Button size="small" icon={<EditOutlined />} onClick={() => openEditProvider(record)}>
+          <ProviderKeyPoolEditor provider={record} onSaved={loadAll} />
+          {record.provider_id === 'script' ? <ScriptProviderEditor provider={record} onSaved={loadAll} /> : <Button size="small" icon={<EditOutlined />} onClick={() => openEditProvider(record)}>
             编辑
-          </Button>
+          </Button>}
           <Popconfirm
             title="确定停用此供应商？"
             description="停用后关联的所有执行通道将不可调度。"
@@ -445,6 +448,7 @@ export function ProvidersView() {
           <Button icon={<ReloadOutlined />} onClick={loadAll} loading={loading}>
             刷新
           </Button>
+          {activeTab === 'providers' && <ScriptProviderEditor onSaved={loadAll} />}
           {activeTab === 'providers' ? (
             <Button
               type="primary"
