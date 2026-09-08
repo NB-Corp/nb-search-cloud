@@ -52,11 +52,13 @@ export class SdkExecutionBridge implements ExecutionBridge {
       await resolvePinned(publicUrl(source['url'], false), signal, this.options.resolver);
     }
     const transport = new CloudPinnedHttpTransport({ endpoints, maxRequests: plan.budget.provider_calls, deadlineMs: plan.budget.timeout_ms }, this.options.io, this.options.resolver);
+    const searchTimeout = plan.kind === 'search' ? plan.budget.timeout_ms : 30_000;
+    const fetchTimeout = plan.kind === 'fetch' ? plan.budget.timeout_ms : 60_000;
     const defaults = plan.kind === 'search' ? { search_lane: plan.selected[0]!.lane_id } : { fetch_chain: [{ input_kind: 'url', pipelines: [plan.selected[0]!.lane_id] }] };
     const presets = typeof plan.parsed_wire['preset'] === 'string' ? { [plan.parsed_wire['preset']]: { lanes: plan.selected.map((lane) => lane.lane_id) } } : {};
     const overrides = parseConfigPatch({ schema_version: '4', home: this.privateHome, jobs_root: resolve(this.privateHome, 'unused-jobs'), provider_instances: instances, credential_slots: credentials, lanes, defaults, presets,
       retention_hours: 72, log_level: 'error', fetch: { file_scopes: [] }, execution: { max_provider_calls: plan.budget.provider_calls, max_concurrency: plan.budget.max_concurrency, retry_count: 0,
-        search_timeout_ms: plan.budget.timeout_ms, fetch_timeout_ms: plan.budget.timeout_ms, max_inline_bytes: plan.budget.max_inline_bytes,
+        search_timeout_ms: searchTimeout, fetch_timeout_ms: fetchTimeout, max_inline_bytes: plan.budget.max_inline_bytes,
         fetch: { max_source_bytes: 2_097_152, max_response_bytes: 2_097_152, max_content_chars: 200_000, max_redirects: 0, quality: { min_content_chars: 1, blocked_markers: [] } } } }, 'cloud execution plan');
     const clear: CanonicalConfigPatch = { provider_instances: null, credential_slots: null, lanes: null, defaults: null, presets: null };
     const runtime = createNbSearchRuntime({ env, config: clear, overrides, http_transport: transport });

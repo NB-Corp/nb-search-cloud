@@ -87,7 +87,7 @@ export class CloudPinnedHttpTransport implements HttpTransport {
   private readonly deadline: AbortSignal;
   private violation: string | undefined;
   constructor(policy: TransportPolicy, private readonly io: PinnedIo = new NodePinnedIo(), private readonly resolver: Resolver = systemResolver) {
-    if (!Number.isSafeInteger(policy.maxRequests) || policy.maxRequests < 1 || policy.maxRequests > 64 || !Number.isInteger(policy.deadlineMs) || policy.deadlineMs < 100 || policy.deadlineMs > 120_000) throw new EgressError('REQUEST_LIMIT');
+    if (!Number.isSafeInteger(policy.maxRequests) || policy.maxRequests < 1 || policy.maxRequests > 64 || !Number.isInteger(policy.deadlineMs) || policy.deadlineMs < 100 || policy.deadlineMs > 3_600_000) throw new EgressError('REQUEST_LIMIT');
     this.policy = policy;
     this.endpoints = new Set(policy.endpoints.map((raw) => { const url = publicUrl(raw); if (url.search) throw new EgressError('TARGET_DENIED'); return url.toString(); }));
     this.deadline = AbortSignal.timeout(policy.deadlineMs);

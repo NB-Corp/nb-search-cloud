@@ -41,7 +41,7 @@ export interface JobRow {
   claim_count: number; dispatch_started_at: Date | null; public_error: SafeFailure | null;
   sync_envelope: Record<string, Json> | null; purged_at: Date | null;
 }
-export const LIMITS = Object.freeze({ maxItems: 64, inlineBytes: 65_536, artifactBytes: 16_777_216, chunkBytes: 12_288, ttlSeconds: 259_200, maxTimeoutMs: 120_000, userActive: 4, tenantActive: 16, queueMs: 300_000, leaseMs: 30_000 });
+export const LIMITS = Object.freeze({ maxItems: 64, inlineBytes: 65_536, artifactBytes: 16_777_216, chunkBytes: 12_288, ttlSeconds: 259_200, maxTimeoutMs: 3_600_000, maxSyncTimeoutMs: 120_000, userActive: 4, tenantActive: 16, queueMs: 300_000, leaseMs: 30_000 });
 export function failure(code: 'WORKER_LOST' | 'WORKER_START_FAILED' | 'CANCELLED' | 'DEADLINE_EXCEEDED' | 'INTERNAL' | 'OUTPUT_TOO_LARGE' | 'PROVIDER_UNAVAILABLE'): SafeFailure {
   const messages = { WORKER_LOST: 'Worker execution outcome is unknown.', WORKER_START_FAILED: 'Worker could not start execution.', CANCELLED: 'Execution was cancelled.', DEADLINE_EXCEEDED: 'Execution deadline exceeded.', INTERNAL: 'Execution failed.', OUTPUT_TOO_LARGE: 'Execution output exceeded the result limit.', PROVIDER_UNAVAILABLE: 'Provider execution is unavailable.' };
   return { code, message: messages[code], retryable: false };

@@ -28,6 +28,14 @@ it('connects only to the selected numeric peer with verified cert/SNI/Host; neve
     expect(fixture.seen.at(-1)).toMatchObject({ host: `provider.example:${fixture.port}`, sni: 'provider.example' });
   } finally { if (original === undefined) delete process.env['HTTPS_PROXY']; else process.env['HTTPS_PROXY'] = original; await new Promise<void>((ok) => forbidden.close(() => ok())); }
 });
+it('preserves streamed text, Accept and split UTF-8 through real pinned TLS without changing send()', async () => {
+  const t = transport('/sse');
+  const result = await t.send<string>(request('/sse', { response_type: 'text', max_response_bytes: 1024, redirect: 'manual', headers: { Accept: 'text/event-stream' }, body: { stream: true } }));
+  expect(result).toEqual({ status: 200, headers: { 'content-type': 'text/event-stream' }, body: 'data: {"text":"证据 🌍 café"}\n\ndata: [DONE]\n\n' });
+  expect(fixture.seen.at(-1)).toMatchObject({ headers: { accept: 'text/event-stream' }, body: { stream: true } });
+  await expect(transport('/sse').send(request('/sse', { response_type: 'text', max_response_bytes: 16 }))).rejects.toMatchObject({ name: 'ResponseLimitError' });
+  await expect(transport('/sse-disconnect').send(request('/sse-disconnect', { response_type: 'text' }))).rejects.toMatchObject({ reason: 'CONNECTION_FAILED' });
+});
 it('rejects every prohibited DNS answer and special-address form before any connector or request', async () => {
   const before = fixture.connections, requests = fixture.seen.length, pins = fixture.pins.length;
   for (const bad of ['127.0.0.1', '10.0.0.1', '172.16.0.1', '192.168.1.1', '169.254.169.254', '168.63.129.16', '100.64.0.1', '::1', 'fe80::1', 'fc00::1', '::ffff:127.0.0.1', '::ffff:93.184.216.34', '0:0:0:0:0:ffff:7f00:1', '2001:db8::1', 'fe80::1%eth0', '64:ff9b::c000:201', '2002:c000:201::1', '2001::1', 'fec0::1', 'ff02::1', '0.0.0.0', '224.0.0.1', '192.0.2.1', '198.18.0.1']) {

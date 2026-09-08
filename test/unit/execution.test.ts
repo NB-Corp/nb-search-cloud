@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { SecretVault } from '../../src/execution/crypto.js';
 import { canonicalContent } from '../../src/execution/idempotency.js';
 import { endpoint, operation, providerBase, providerOptions } from '../../src/execution/catalog.js';
+import { planTimeoutMaximum, resolvePlanTimeout } from '../../src/execution/plans.js';
 import type { Json } from '../../src/execution/types.js';
 
 const s = (query: Json, extra: Record<string, Json> = {}) => canonicalContent('search', { action: 'run', execution: 'async', idempotency_key: 'k1', query, ...extra });
@@ -47,5 +48,17 @@ describe('execution primitives (no SDK or provider invocation)', () => {
     expect(() => providerOptions('exa', { search_path: '/private' })).toThrow();
     expect(() => providerBase('exa', 'https://user:pass@provider.example')).toThrow();
     expect(() => providerBase('exa', 'http://provider.example')).toThrow();
+  });
+  it('uses GMA operation identity for async timeout defaults while keeping sync and fetch caps', () => {
+    const gma = { provider_id: 'grok-multi-agent' as const, operation_id: 'research' as const };
+    const exa = { provider_id: 'exa' as const, operation_id: 'search' as const };
+    expect(resolvePlanTimeout('search', 'async', [gma], undefined)).toBe(600_000);
+    expect(resolvePlanTimeout('search', 'sync', [gma], undefined)).toBe(120_000);
+    expect(resolvePlanTimeout('search', 'async', [exa], undefined)).toBe(30_000);
+    expect(resolvePlanTimeout('fetch', 'sync', [gma], undefined)).toBe(60_000);
+    expect(resolvePlanTimeout('search', 'async', [gma], 7_000)).toBe(7_000);
+    expect(planTimeoutMaximum('search', 'async')).toBe(3_600_000);
+    expect(planTimeoutMaximum('search', 'sync')).toBe(120_000);
+    expect(planTimeoutMaximum('fetch', 'sync')).toBe(120_000);
   });
 });

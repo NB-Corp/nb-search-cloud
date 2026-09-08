@@ -2,7 +2,7 @@ import type { PoolClient } from 'pg';
 import { queryRows } from '../db/transaction.js';
 import { operation, type ProviderId } from './catalog.js';
 import { BusinessRejection, ExecutionError } from './errors.js';
-import { LIMITS, type FrozenPlan, type Json, type Kind, type SelectedOperation } from './types.js';
+import { LIMITS, type Delivery, type FrozenPlan, type Json, type Kind, type SelectedOperation } from './types.js';
 import type { ExecutionGroup } from './policy.js';
 
 export interface AvailableLane {
@@ -17,6 +17,14 @@ export async function groupLanes(tx: PoolClient, tenantId: string, groupId: stri
     JOIN provider_configs c ON c.tenant_id=p.tenant_id AND c.id=p.current_config_id WHERE gl.tenant_id=$1 AND gl.group_id=$2 ORDER BY l.id`, [tenantId, groupId]);
 }
 export type LaneReady = (lane: AvailableLane) => boolean;
+export function resolvePlanTimeout(kind: Kind, delivery: Delivery, selected: readonly Pick<SelectedOperation, 'provider_id' | 'operation_id'>[], requested: Json | undefined): number {
+  if (typeof requested === 'number') return requested;
+  if (kind === 'fetch') return 60_000;
+  const gmaResearch = selected.some((item) => item.provider_id === 'grok-multi-agent' && item.operation_id === 'research');
+  if (gmaResearch) return delivery === 'async' ? 600_000 : 120_000;
+  return 30_000;
+}
+export function planTimeoutMaximum(kind: Kind, delivery: Delivery): number { return kind === 'search' && delivery === 'async' ? LIMITS.maxTimeoutMs : LIMITS.maxSyncTimeoutMs; }
 export async function buildPlan(tx: PoolClient, tenantId: string, group: ExecutionGroup, kind: Kind, wire: Record<string, Json>, sdkVersion: string, ready: LaneReady): Promise<FrozenPlan> {
   const delivery = wire['execution'] === 'async' ? 'async' : 'sync';
   if (kind === 'fetch' && delivery === 'async') throw new BusinessRejection('LANE_EXECUTION_UNSUPPORTED', 'Asynchronous URL fetch is not supported.');
@@ -52,8 +60,8 @@ export async function buildPlan(tx: PoolClient, tenantId: string, group: Executi
   const count = kind === 'fetch' ? 1 : Array.isArray(wire['query']) ? wire['query'].length : 1;
   const calls = count * selected.length;
   if (calls < 1 || calls > LIMITS.maxItems) throw new BusinessRejection('BUDGET_EXCEEDED', 'Selected operations exceed the execution budget.');
-  const timeout = typeof wire['timeout_ms'] === 'number' ? wire['timeout_ms'] : kind === 'search' ? 30_000 : 60_000;
-  if (!Number.isInteger(timeout) || timeout < 100 || timeout > LIMITS.maxTimeoutMs) throw new ExecutionError('INVALID_REQUEST');
+  const timeout = resolvePlanTimeout(kind, delivery, selected, wire['timeout_ms']);
+  if (!Number.isInteger(timeout) || timeout < 100 || timeout > planTimeoutMaximum(kind, delivery)) throw new ExecutionError('INVALID_REQUEST');
   const effective: Record<string, Json> = { ...wire, execution: 'sync', timeout_ms: timeout };
   delete effective['idempotency_key'];
   if (kind === 'search') effective['max_results'] = wire['max_results'] ?? 8;

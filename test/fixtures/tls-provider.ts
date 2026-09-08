@@ -20,6 +20,14 @@ export async function tlsProvider(redirectTarget = 'https://127.0.0.1/forbidden'
     const body = JSON.parse(Buffer.concat(chunks).toString() || '{}');
     seen.push({ path: req.url!, host: req.headers.host, sni: (req.socket as TLSSocket).servername, body, headers: req.headers });
     const path = req.url!;
+    if (path === '/sse' || path === '/sse-disconnect') {
+      res.setHeader('content-type', 'text/event-stream');
+      const bytes = Buffer.from('data: {"text":"证据 🌍 café"}\n\ndata: [DONE]\n\n');
+      const split = bytes.indexOf(Buffer.from('🌍')) + 1;
+      res.write(bytes.subarray(0, split));
+      setTimeout(() => { if (path === '/sse-disconnect') res.destroy(); else res.end(bytes.subarray(split)); }, 10);
+      return;
+    }
     if (path === '/hang') return;
     if (path === '/headers') { res.setHeader('x-large', 'x'.repeat(20_000)); res.end('{}'); return; }
     if (path === '/redirect-no-location') { res.statusCode = 302; res.end(); return; }

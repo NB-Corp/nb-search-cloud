@@ -30,7 +30,7 @@ export async function capabilities(tx: PoolClient, principal: ServicePrincipal, 
     fetch: { default_representation: 'markdown', inputs: [{ kind: 'url', enabled: true, max_bytes: 2_097_152 }, { kind: 'inline_text', enabled: false, max_bytes: 0 }, { kind: 'inline_bytes', enabled: false, max_bytes: 0 }, { kind: 'file', enabled: false, max_bytes: 0 }],
       chains: identity.group.default_fetch_pipeline && fetchLanes.some((lane) => lane.id === identity.group.default_fetch_pipeline) ? [{ input_kind: 'url', representation: 'markdown', pipelines: [identity.group.default_fetch_pipeline] }, { input_kind: 'url', representation: 'text', pipelines: [identity.group.default_fetch_pipeline] }] : [],
       pipelines: fetchLanes.map((lane) => ({ id: lane.id, input_kinds: ['url'], media_types: ['text/html', 'text/plain', 'text/markdown'], representations: ['markdown', 'text'], execution_modes: modes('fetch', available(lane)), egress: 'url', stages: [{ id: 'remote.acquire', role: 'acquire' }, { id: 'content.extract', role: 'extract' }], availability: available(lane) ? 'ready' : 'unavailable', issues: available(lane) ? [] : [{ code: 'CLOUD_EGRESS_UNVERIFIED' }], latency: lane.latency, cost: lane.cost })),
-      limits: { max_source_bytes: 2_097_152, max_response_bytes: 2_097_152, max_content_chars: 200_000, max_redirects: 0, max_timeout_ms: LIMITS.maxTimeoutMs, max_inline_bytes: LIMITS.inlineBytes },
+      limits: { max_source_bytes: 2_097_152, max_response_bytes: 2_097_152, max_content_chars: 200_000, max_redirects: 0, max_timeout_ms: LIMITS.maxSyncTimeoutMs, max_inline_bytes: LIMITS.inlineBytes },
     },
     jobs: { result_ttl_seconds: LIMITS.ttlSeconds, cancel_supported: true },
   };
